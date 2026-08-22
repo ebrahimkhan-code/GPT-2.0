@@ -96,29 +96,61 @@ print("Decoded:", decode(encoded))
 
 # Convert the entire text into numbers using
 # our encoder.
-
 # Then convert those numbers into a PyTorch tensor.
 data = torch.tensor(
     encode(text),
     dtype=torch.long
 )
-
 print("Data shape:", data.shape)
 
 
 #spilit data
 
-# We will use 90% of the data for training.
-#
+# We will use 90% of the data for training.#
 # The remaining 10% will be used for validation.
 n = int(0.9 * len(data))
-
-# First 90%  training data
+# First 90  training data
 train_data = data[:n]
-
-# Last 10%  validation data
+# Last 10  validation data
 val_data = data[n:]
-
-
 print("Training data length:", len(train_data))
 print("Validation data length:", len(val_data))
+
+# batch generation
+
+# How many sequences we process at once.
+batch_size = 64
+
+# Maximum number of characters/tokens
+# the model sees at one time.
+block_size = 256
+
+
+def get_batch(split):
+
+    data = train_data if split == 'train' else val_data
+
+    # Pick random starting positions.
+    ix = torch.randint(
+        len(data) - block_size,
+        (batch_size,)
+    )
+
+    # Create the input sequences.
+    x = torch.stack([
+        data[i:i + block_size]
+        for i in ix
+    ])
+
+    # Create the target sequences.
+    y = torch.stack([
+        data[i + 1:i + block_size + 1]
+        for i in ix
+    ])
+
+    return x, y
+
+xb, yb = get_batch('train')
+
+print("Input shape:", xb.shape)
+print("Target shape:", yb.shape)

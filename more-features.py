@@ -66,26 +66,19 @@ print("Unique characters:", chars)
 print("Vocabulary size:", vocab_size)
 
 # char- int
-
 # Create a dictionary that gives every
 # character a unique number.
-
 stoi = {ch: i for i, ch in enumerate(chars)}
-
 # int - char
-
 itos = {i: ch for i, ch in enumerate(chars)}
 
 # Convert text into numbers.
-
 encode = lambda s: [stoi[c] for c in s]
-
 # Convert numbers back into text.
-
 decode = lambda l: ''.join([itos[i] for i in l])
 
-sample = "Hello"
 
+sample = "Hello"
 encoded = encode(sample)
 
 print("Original:", sample)
@@ -154,3 +147,63 @@ xb, yb = get_batch('train')
 
 print("Input shape:", xb.shape)
 print("Target shape:", yb.shape)
+
+# BIGRAM LANGUAGE MODEL
+class BigramLanguageModel(nn.Module):
+
+    def __init__(self, vocab_size):
+        super().__init__()
+
+
+        # Create a lookup table.
+        # Each character gets a row.
+        # Each row contains a score for every
+        # possible next character.
+        self.token_embedding_table = nn.Embedding(
+            vocab_size,
+            vocab_size
+        )
+
+
+    def forward(self, idx, targets=None):
+
+        # Convert input token IDs into predictions        
+        # idx shape: (Batch, Time)
+        # logits shape: (Batch, Time, Vocabulary)
+
+        logits = self.token_embedding_table(idx)
+
+        if targets is None:
+            loss = None
+        else:
+            B, T, C = logits.shape
+            logits = logits.view(B * T, C)
+            targets = targets.view(B * T)
+            # calculate how wrong the model is
+            loss = F.cross_entropy(
+                logits,
+                targets
+            )
+        return logits, loss
+    
+    def generate(self, idx, max_new_tokens):
+        for _ in range(max_new_tokens):
+            logits, loss = self(idx)
+            logits = logits[:, -1, :]
+            probs = F.softmax(logits,dim=-1)
+            idx_next = torch.multinomial(probs,num_samples=1)
+
+            idx = torch.cat((idx, idx_next),dim=1)
+
+        return idx
+
+model = BigramLanguageModel(vocab_size)
+
+# Text Gen
+context = torch.zeros((1, 1),dtype=torch.long)
+
+# Gen 200 new characters.
+generated = model.generate(context,max_new_tokens=200)
+
+# Convert token IDs back into characters.
+print(decode(generated[0].tolist()))

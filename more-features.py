@@ -30,6 +30,9 @@ n_head = 6
 n_layer = 6
 # Dropout helps reduce overfitting
 dropout = 0.2
+n_embd = 384
+n_head = 6
+
 
 # LOAD DATASET
 
@@ -297,3 +300,153 @@ out = head(x)
 
 print("Input shape:", x.shape)
 print("Attention output shape:", out.shape)
+
+
+# Multiple head attention
+class MultiHeadAttention(nn.Module):
+    """Multiple attention heads working in parallel."""
+
+    def __init__(self, num_heads, head_size):
+        super().__init__()
+
+        # Create multiple attention heads
+        # All heads work independently
+        self.heads = nn.ModuleList([Head(head_size)for _ in range(num_heads)])
+
+
+        # After all heads finish,
+        # combine their outputs and project
+        # them back to n_embd dimensions
+        self.proj = nn.Linear(head_size * num_heads,n_embd)
+
+        # Dropout helps prevent overfitting
+        self.dropout = nn.Dropout(dropout)
+
+
+    def forward(self, x):
+
+        # Run every attention head
+        # Each head produces:
+        # (B, T, head_size)
+        # Then concatenate them together.
+        out = torch.cat([h(x) for h in self.heads],dim=-1)
+
+
+        # Project the combined output
+        # back into the embedding dimension
+        out = self.proj(out)
+
+        # Apply dropout.
+        out = self.dropout(out)
+
+        return out
+
+head_size = n_embd // n_head
+
+multi_head = MultiHeadAttention(n_head, head_size)
+
+out = multi_head(x)
+
+print("Multi-head input:", x.shape)
+print("Multi-head output:", out.shape)
+
+# ==========================================
+# STEP 9: FEED-FORWARD NETWORK
+# ==========================================
+
+class FeedForward(nn.Module):
+    """A small neural network applied to each token."""
+
+    def __init__(self, n_embd):
+        super().__init__()
+
+        self.net = nn.Sequential(
+
+            # Expand the embedding size
+            # 384 -> 1536
+
+            nn.Linear(n_embd,4 * n_embd),
+
+
+            # Add non-linearity=
+            # This allows the network to learn
+            # more complex patterns
+            nn.ReLU(),
+
+
+            # Reduce the size back
+            # 1536 -> 384
+            nn.Linear(
+                4 * n_embd,n_embd),
+
+            # Randomly drop some values during
+            # training to reduce overfitting.
+            nn.Dropout(dropout)
+        )
+
+
+    def forward(self, x):
+
+        # Pass the input through the network.
+        return self.net(x)
+
+# TEST FFN
+
+ffwd = FeedForward(n_embd)
+
+out = ffwd(x)
+
+print("Feed-forward input:", x.shape)
+print("Feed-forward output:", out.shape)
+
+# Transformer block
+
+class Block(nn.Module):
+    """One Transformer block."""
+
+    def __init__(self, n_embd, n_head):
+        super().__init__()
+
+        # Each attention head gets part
+        # of the embedding dimensions.
+        head_size = n_embd // n_head
+
+
+        # self attention
+
+        # Communication between tokens
+        self.sa = MultiHeadAttention(n_head,head_size)
+
+
+        # feed forward
+
+        # Process the information after
+        # attention.
+        self.ffwd = FeedForward(n_embd)
+
+        # layer normalization-
+        # Normalize before attention.
+        self.ln1 = nn.LayerNorm(n_embd)
+
+        # Normalize before feed-forward.
+        self.ln2 = nn.LayerNorm(n_embd)
+
+
+    def forward(self, x):
+
+        # ATTENTION + RESIDUAL CONNECTION
+
+        x = x + self.sa(self.ln1(x))
+
+        # FEED-FORWARD + RESIDUAL
+
+        x = x + self.ffwd(self.ln2(x))
+
+        return x
+
+block = Block(n_embd,n_head)
+
+out = block(x)
+
+print("Transformer input:", x.shape)
+print("Transformer output:", out.shape)

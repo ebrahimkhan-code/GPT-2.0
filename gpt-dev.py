@@ -102,12 +102,6 @@ for b in range(batch_size): # batch dimension
 
 # Bigram Language Model
 torch.manual_seed(1337)
-
-import torch
-import torch.nn as nn
-from torch.nn import functional as F
-torch.manual_seed(1337)
-
 class BigramLanguageModel(nn.Module):
 
     def __init__(self, vocab_size):
@@ -115,10 +109,10 @@ class BigramLanguageModel(nn.Module):
         # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
+    # forwardpsas
     def forward(self, idx, targets=None):
         B, T = idx.shape
-
-        # Look up logits for every input token
+        # look up logits for every input token
         logits = self.token_embedding_table(idx)
 
         if targets is None:
@@ -126,31 +120,30 @@ class BigramLanguageModel(nn.Module):
 
         else:
             B, T, C = logits.shape
-
             # Flatten logits
             logits = logits.view(B * T, C)
-
             # Flatten targets
             targets = targets.view(B * T)
-
             # Calculate loss
             loss = F.cross_entropy(logits, targets)
 
         return logits, loss
 
     def generate(self, idx, max_new_tokens):
-        # idx is (B, T) array of indices in the current context
+
         for _ in range(max_new_tokens):
-            # get the predictions
-            logits, loss = self(idx)
-            # focus only on the last time step
-            logits = logits[:, -1, :] # becomes (B, C)
-            # apply softmax to get probabilities
-            probs = F.softmax(logits, dim=-1) # (B, C)
-            # sample from the distribution
-            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
-            # append sampled index to the running sequence
-            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
+            # Only use the last block_size tokens
+            idx_cond = idx[:, -block_size:]
+            # Get predictions
+            logits, loss = self(idx_cond)
+            # Get prediction for the final position
+            logits = logits[:, -1, :]
+            # Convert logits to probabilities
+            probs = F.softmax(logits, dim=-1)
+            # Sample next character
+            idx_next = torch.multinomial(probs, num_samples=1)
+            # Add new character
+            idx = torch.cat((idx, idx_next), dim=1)
         return idx
 
 m = BigramLanguageModel(vocab_size)
@@ -159,3 +152,26 @@ print(logits.shape)
 print(loss)
 
 print(decode(m.generate(idx = torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()))
+
+# create a PyTorch optimizer
+optimizer = torch.optim.AdamW(m.parameters(), lr=1e-3)
+
+batch_size = 32  # Number of sequences processed at once
+
+for steps in range(100):  # Train the model for 100 steps
+    # Get a random batch of training data
+    xb, yb = get_batch('train')
+    # Pass the input and target to the model
+    # logits = model predictions
+    # loss = how wrong the predictions are
+    logits, loss = m(xb, yb)
+    # Remove gradients from the previous step
+    optimizer.zero_grad(set_to_none=True)
+    # Calculate gradients using backpropagation
+    loss.backward()
+    # Update the model's weights
+    optimizer.step()
+
+# Print the final loss
+print("Loss = ",loss.item())
+print(decode(m.generate(idx = torch.zeros((1, 1), dtype=torch.long), max_new_tokens=500)[0].tolist()))

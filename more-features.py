@@ -8,35 +8,27 @@ torch.manual_seed(1337)
 
 # Number of sequences processed at once.
 batch_size = 64
-
 # Maximum number of tokens the model can
 # look at in one sequence.
 block_size = 256
-
 # Training iterations.
 max_iters = 5000
-
 # How often we will evaluate the model.
 eval_interval = 500
-
 # Learning rate for the optimizer.
 learning_rate = 3e-4
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-# Number of batches used during evaluation.
+# Number of batches used during evaluation
 eval_iters = 200
-
-# Size of token embeddings.
+# Size of token embeddings
 n_embd = 384
-
-# Number of attention heads.
+# Number of attention heads
 n_head = 6
-
-# Number of Transformer blocks.
+# Number of Transformer blocks
 n_layer = 6
-
-# Dropout helps reduce overfitting.
+# Dropout helps reduce overfitting
 dropout = 0.2
 
 # LOAD DATASET
@@ -207,3 +199,101 @@ generated = model.generate(context,max_new_tokens=200)
 
 # Convert token IDs back into characters.
 print(decode(generated[0].tolist()))
+
+
+# Self Attention Head
+
+class Head(nn.Module):
+    """One head of self-attention."""
+
+    def __init__(self, head_size):
+        super().__init__()
+
+        # key tells us what information
+        # each token contains.
+        self.key = nn.Linear(n_embd,head_size,bias=False)
+
+        # Query tells us what information
+        # the current token is looking for.
+        self.query = nn.Linear(n_embd,head_size,bias=False)
+
+        # Value contains the information
+        # that will actually be passed forward.
+        self.value = nn.Linear(n_embd,head_size,bias=False)
+
+        # This prevents a token from looking
+        # at future tokens.
+
+        self.register_buffer('tril',torch.tril(torch.ones(block_size,block_size)))
+
+        # randomly drops some attention values
+        # during training to reduce overfitting.
+        self.dropout = nn.Dropout(dropout)
+
+
+    def forward(self, x):
+
+        # x shape:
+        #
+        # (Batch, Time, Channels)
+        B, T, C = x.shape
+        # Create keys.
+        k = self.key(x)
+        # Create queries.
+        q = self.query(x)
+
+        # Compare queries with keys.
+        # q shape:
+        # (B, T, head_size)
+        
+        # k transpose:
+        # (B, head_size, T)
+
+        wei = q @ k.transpose(-2, -1)
+
+        # This helps keep the numbers stable.
+        wei = wei * k.shape[-1] ** -0.5
+
+
+        #   future Token
+        # Prevent the model from seeing future
+        # characters.
+        wei = wei.masked_fill(self.tril[:T, :T] == 0,float('-inf'))
+        # Convert attention scores into
+        # probabilities.
+        wei = F.softmax(wei,dim=-1)
+        # Apply dropout.
+        wei = self.dropout(wei)
+
+        # Create values.
+        v = self.value(x)
+
+        # Combine values according to
+        # attention probabilities.
+        out = wei @ v
+
+        return out
+
+
+#   test attention head
+
+# Create random input embeddings
+#
+# Shape:
+# (batch_size, block_size, n_embd)
+x = torch.randn(
+    batch_size,
+    block_size,
+    n_embd
+)
+
+# Create one attention head
+head_size = 64
+
+head = Head(head_size)
+
+# Pass our input through attention
+out = head(x)
+
+print("Input shape:", x.shape)
+print("Attention output shape:", out.shape)

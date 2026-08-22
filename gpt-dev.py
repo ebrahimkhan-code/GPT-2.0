@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 with open('input.txt', 'r', encoding='utf-8') as f: # open the input file
@@ -102,63 +103,59 @@ for b in range(batch_size): # batch dimension
 # Bigram Language Model
 torch.manual_seed(1337)
 
+import torch
+import torch.nn as nn
+from torch.nn import functional as F
+torch.manual_seed(1337)
+
 class BigramLanguageModel(nn.Module):
 
-    # each token directly looks up a row in this table.
-    # each row contains `vocab_size` values, where each value
-    # represents the score (logit) for a possible next token
     def __init__(self, vocab_size):
         super().__init__()
+        # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
-
-    # idx contains the input token IDs.
-    # targets contains the correct next-token IDs.
-    def forward(self, idx, targets = None):
+    def forward(self, idx, targets=None):
         B, T = idx.shape
 
-        # look up the logits for every input token
-        # embedding table converts (b,t) to (b,t,c)
-        logits = self.token_embedding_table(idx) # (Batch, num of token, number ofpossible token in vocab)
+        # Look up logits for every input token
+        logits = self.token_embedding_table(idx)
+
         if targets is None:
             loss = None
+
         else:
-            
-            B,T,C = logits.shape
-            # flatten logits
-            logits = logits.view(B*T, C)
-            # each target now corresponds to one row of logits
-            # flatten targets
-            targets= targets.view(B * T)
+            B, T, C = logits.shape
+
+            # Flatten logits
+            logits = logits.view(B * T, C)
+
+            # Flatten targets
+            targets = targets.view(B * T)
+
             # Calculate loss
-            #CE produces a single number representing
-            # how wrong the model is
-            # lower loss = better predictions.
-            loss = F.cross_entropy(logits,targets)
+            loss = F.cross_entropy(logits, targets)
 
-        # logits  model predictions
-        # loss   how wrong the predictions are
-        return logits,loss
+        return logits, loss
 
-    def generate(self, idx, max_new_token):
-        # idx contains the tokens we already have.
-        for _ in range(max_new_token):
-            # only use the last block_size tokens
-            idx_cond = idx[:, -block_size:]
-            # Get predictions
+    def generate(self, idx, max_new_tokens):
+        # idx is (B, T) array of indices in the current context
+        for _ in range(max_new_tokens):
+            # get the predictions
             logits, loss = self(idx)
-            # Get predictions for the final position
-            logits= logits[:, -1, :]
-             # Convert logits to probabilities
-            probs = F.softmax(logits, dim = -1)
-            # Sample next character
-            idx_next = torch.multinomial(probs, num_samples=1) 
-             # Add new character to sequence
-            idx = torch.cat((idx, idx_next), dim=1)
+            # focus only on the last time step
+            logits = logits[:, -1, :] # becomes (B, C)
+            # apply softmax to get probabilities
+            probs = F.softmax(logits, dim=-1) # (B, C)
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
+            # append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
 m = BigramLanguageModel(vocab_size)
-logits, loss = m(xb, yb) # calling(input, target)
-print(logits.shape) # (logits, target, prediction score)
+logits, loss = m(xb, yb)
+print(logits.shape)
 print(loss)
-print(decode(m.generate(idx = torch.zeros((1,1),dtype=torch.long), max_new_token=100).tolist()))
+
+print(decode(m.generate(idx = torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()))

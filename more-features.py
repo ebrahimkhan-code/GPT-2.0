@@ -91,3 +91,34 @@ encoded = encode(sample)
 print("Original:", sample)
 print("Encoded:", encoded)
 print("Decoded:", decode(encoded))
+
+# train / validation spilit
+
+# Convert the entire text into numbers using
+# our encoder.
+
+# Then convert those numbers into a PyTorch tensor.
+data = torch.tensor(
+    encode(text),
+    dtype=torch.long
+)
+
+print("Data shape:", data.shape)
+
+
+#spilit data
+
+# We will use 90% of the data for training.
+#
+# The remaining 10% will be used for validation.
+n = int(0.9 * len(data))
+
+# First 90%  training data
+train_data = data[:n]
+
+# Last 10%  validation data
+val_data = data[n:]
+
+
+print("Training data length:", len(train_data))
+print("Validation data length:", len(val_data))
